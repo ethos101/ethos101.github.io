@@ -1,5 +1,5 @@
 ---
-title: Dusting Off - Moon
+title: Observatory
 date: 2025-09-18
 ---
 Four solar panels and four more on the way.
