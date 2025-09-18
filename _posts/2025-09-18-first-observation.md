@@ -2,6 +2,6 @@
 title: Dusting Off - Moon
 date: 2020-05-31
 ---
-Captured the Moon as a test. Clear skies, great details in the craters!
+Dusted off the telescope and captured the Moon as a test.
 ![Moon Image](/images/moon.jpg)
 
