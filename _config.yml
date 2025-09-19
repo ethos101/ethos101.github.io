@@ -21,7 +21,7 @@ title                    : "Willow Creek Observatory"
 title_separator          : "-"
 subtitle                 : # site tagline that appears below site title in masthead
 name                     : # "WCO web log"
-description              : "An amazing website."
+description              : # "An amazing website."
 url                      : # the base hostname & protocol for your site e.g. "https://mmistakes.github.io"
 baseurl                  : # the subpath of your site, e.g. "/blog"
 repository               : # GitHub username/repo-name e.g. "mmistakes/minimal-mistakes"
