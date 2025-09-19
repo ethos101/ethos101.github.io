@@ -1,6 +1,7 @@
 ---
 layout: home
 header:
-  image: /images/img_8396.webp
+  image: https://www.cleardarksky.com/c/BrnrdMNcsk.gif?c=1666847
   caption: "Solar panels charge batteries which power the mount setup."
 ---
+- ![https://www.cleardarksky.com/c/BrnrdMNkey.html](https://www.cleardarksky.com/c/BrnrdMNcs0.gif?1)
