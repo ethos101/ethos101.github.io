@@ -4,20 +4,3 @@ header:
   image: /images/img_8396.webp
   caption: "Solar panels charge batteries which power the mount setup."
 ---
-This is the observatory. I'll add more content as time permits.
-
-#### Telescope Status
-- dusty and up
-- remote focusers both RA and DEC are down
-
-#### Battery Wall Status
-- 24v Li-Ion down
-- 12v lead acid up
-- Solar charger up
-
-#### Ham Station Status
-- Cross-band Repeater up
-- 100w Icom up
-
-#### Windmill Status
-- up
