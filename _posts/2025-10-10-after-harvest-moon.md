@@ -1,5 +1,5 @@
 ---
-title: Image Gallery
+title: Images
 date: 2025-10-10
 published: true
 ---
