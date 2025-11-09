@@ -1,8 +1,11 @@
 ---
 title: Images
-date: 2025-10-10
+date: 2025-11-1
 published: true
 ---
+I mounted the full frame sensor on the 12 inch SCT. Imperfect focus test.
+![moon](/images/1M0A1171.jpeg)
+
 I managed to dial this in by hand on the 4 inch refractor telescope and called it a night. October 10th, 2025
 ![after harvest moon](/images/IMG_0146.jpeg)
 
