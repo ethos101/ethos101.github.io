@@ -1,8 +1,23 @@
+# Jekyll Configuration
+
+# Site settings
+
+title: "Willow Creek Observatory"
+author: "Observatory Log"
+
+# Markdown settings
+markdown: kramdown
+
+# Plugins
+plugins:
+  - jekyll-paginate
+  - jekyll-sitemap
+  - jekyll-gist
+  - jekyll-feed
+  - jekyll-include-cache
+
+# Remote Theme
 remote_theme: "hydecorp/hydejack"
 
-# Other settings here
-
-exclude:
-  - path/to/exclude1
-  - path/to/exclude2
-  # Include Hydejack appropriate paths
+# Original Defaults Section
+# Add any other original default settings here if applicable.
