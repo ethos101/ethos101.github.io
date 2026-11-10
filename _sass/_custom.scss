@@ -76,6 +76,27 @@ h6,
 }
 
 /* --------------------------------------------------------------------------
+   Home hero: keep the banner image present but not overpowering
+   -------------------------------------------------------------------------- */
+
+.layout--home .page__hero {
+  margin-bottom: 1.5em;
+}
+
+.layout--home .page__hero-image {
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+  object-position: center;
+}
+
+@media (max-width: 768px) {
+  .layout--home .page__hero-image {
+    max-height: 220px;
+  }
+}
+
+/* --------------------------------------------------------------------------
    Small polish
    -------------------------------------------------------------------------- */
 
