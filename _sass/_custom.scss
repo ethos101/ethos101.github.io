@@ -90,9 +90,19 @@ h6,
   object-position: center;
 }
 
+.layout--home .page__hero--overlay {
+  margin-bottom: 1.5em;
+  padding: 2.25em 0;
+  min-height: 0;
+}
+
 @media (max-width: 768px) {
   .layout--home .page__hero-image {
     max-height: 220px;
+  }
+
+  .layout--home .page__hero--overlay {
+    padding: 1.5em 0;
   }
 }
 
