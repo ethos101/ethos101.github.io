@@ -5,5 +5,9 @@ search: false
 
 @charset "utf-8";
 
+/* Slightly larger base type for comfortable reading. */
+$doc-font-size: 17px;
+
 @import "minimal-mistakes/skins/{{ site.minimal_mistakes_skin | default: 'default' }}"; // skin
 @import "minimal-mistakes"; // main partials
+@import "custom"; // site-specific refinements

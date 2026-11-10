@@ -2,6 +2,8 @@
 title: Images
 date: 2025-11-01
 published: true
+header:
+  teaser: /images/1M0A1171.jpeg
 ---
 I mounted the full frame sensor on the 12 inch SCT. Imperfect focus test. November 1st, 2025
 ![moon](/images/1M0A1171.jpeg)

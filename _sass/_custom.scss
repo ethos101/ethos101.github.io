@@ -1,0 +1,94 @@
+/* ==========================================================================
+   Observatory custom refinements
+   Loaded after the theme so these rules win without patching theme files.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Typography: editorial serif headings, comfortable reading measure
+   -------------------------------------------------------------------------- */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.page__title,
+.archive__item-title {
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino,
+    "Book Antiqua", Georgia, serif;
+  letter-spacing: -0.01em;
+}
+
+/* Keep long-form text at a readable width while letting photos run wider. */
+.page__content > p,
+.page__content > ul,
+.page__content > ol,
+.page__content > blockquote,
+.page__content > table {
+  max-width: 68ch;
+}
+
+/* Paragraphs that contain an image should use the full column width. */
+.page__content > p:has(> img),
+.page__content > p:has(> a > img) {
+  max-width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   Photography: framed images that scale down gracefully
+   -------------------------------------------------------------------------- */
+
+.page__content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.page__content > p > img,
+.page__content > p > a > img,
+.page__content > img {
+  display: block;
+  margin: 1.75em auto;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* --------------------------------------------------------------------------
+   Archive grid: consistent image cards
+   -------------------------------------------------------------------------- */
+
+.archive__item-teaser {
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.archive__item-teaser img {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  border-radius: 8px;
+  transition: transform 0.3s ease;
+}
+
+.archive__item:hover .archive__item-teaser img {
+  transform: scale(1.03);
+}
+
+/* --------------------------------------------------------------------------
+   Small polish
+   -------------------------------------------------------------------------- */
+
+.masthead {
+  border-bottom: 1px solid $border-color;
+}
+
+.page__content a {
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.page__content a:hover {
+  border-bottom-color: currentColor;
+}
