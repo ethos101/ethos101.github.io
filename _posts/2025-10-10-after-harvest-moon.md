@@ -1,6 +1,6 @@
 ---
 title: Images
-date: 2025-11-1
+date: 2025-11-01
 published: true
 ---
 I mounted the full frame sensor on the 12 inch SCT. Imperfect focus test. November 1st, 2025
