@@ -53,6 +53,8 @@ out. The old crontab entry has been removed.
 - `SKYCHECK_NO_MAIL=1` — skip email (useful for testing)
 - `SKYCHECK_MAIL_TO`, `SKYCHECK_MAIL_FROM` — override recipients
 - `GIT_SSH_COMMAND` — override the SSH command used for `git push`
+- `SKYCHECK_CHROME` — path to the Chrome/Chromium binary (default
+  `/usr/bin/google-chrome`)
 
 ## Notes
 

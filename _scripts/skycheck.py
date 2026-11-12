@@ -41,7 +41,7 @@ TZ_NAME = "America/Chicago"
 PLACE = "Central Minnesota"
 MAX_CLOUD, MAX_WIND, MAX_GUST = 30, 10, 20
 MIN_VIS_M, MIN_DEW_SPREAD_F = 5000, 3
-CHROME = "/usr/bin/google-chrome"
+CHROME = os.environ.get("SKYCHECK_CHROME", "/usr/bin/google-chrome")
 # Extra models used only to flag forecast disagreement (the main forecast stays best-match).
 MODELS = ["ecmwf_ifs025", "gfs_seamless", "icon_seamless"]
 # ---------------------------
@@ -452,6 +452,9 @@ html_path = os.path.join(HERE, "month.html")
 png_name = f"month_{LAB[:3].lower()}.png"
 png_path = os.path.join(HERE, png_name)
 open(html_path, "w").write(H)
+
+if not os.path.exists(CHROME):
+    raise SystemExit(f"ERROR: Chrome not found at {CHROME} (set SKYCHECK_CHROME)")
 
 from playwright.sync_api import sync_playwright
 with sync_playwright() as pw:
