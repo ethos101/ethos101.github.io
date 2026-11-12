@@ -30,3 +30,9 @@ codekit-config.json
 .sass-cache
 _asset_bundler_cache
 _site
+
+# skycheck.py generated outputs (the published copy lives in images/month.png)
+_scripts/month.html
+_scripts/month_*.png
+_scripts/out.log
+__pycache__/
