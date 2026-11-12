@@ -1,0 +1,7 @@
+[Unit]
+Description=Verify stargazing forecasts against archived weather
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/user/ethos101.github.io/_scripts
+ExecStart=/usr/bin/python3 /home/user/ethos101.github.io/_scripts/verify_forecast.py

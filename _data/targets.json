@@ -1,0 +1,198 @@
+[
+  {
+    "name": "M57 Ring Nebula",
+    "ra": "18:53:35",
+    "dec": "33:01:45",
+    "fun": 5,
+    "moon_ok": true
+  },
+  {
+    "name": "M27 Dumbbell Nebula",
+    "ra": "19:59:36",
+    "dec": "22:43:16",
+    "fun": 5,
+    "moon_ok": true
+  },
+  {
+    "name": "M81/M82 Bode's+Cigar",
+    "ra": "09:55:33",
+    "dec": "69:03:55",
+    "fun": 5,
+    "moon_ok": false
+  },
+  {
+    "name": "M13 Hercules Cluster",
+    "ra": "16:41:41",
+    "dec": "36:27:37",
+    "fun": 5,
+    "moon_ok": true
+  },
+  {
+    "name": "M15 Globular",
+    "ra": "21:29:58",
+    "dec": "12:10:01",
+    "fun": 5,
+    "moon_ok": true
+  },
+  {
+    "name": "M42 Orion Nebula",
+    "ra": "05:35:17",
+    "dec": "-05:23:28",
+    "fun": 5,
+    "moon_ok": true
+  },
+  {
+    "name": "M51 Whirlpool Galaxy",
+    "ra": "13:29:53",
+    "dec": "47:11:43",
+    "fun": 4,
+    "moon_ok": false
+  },
+  {
+    "name": "NGC 7662 Blue Snowball",
+    "ra": "23:25:54",
+    "dec": "42:32:06",
+    "fun": 4,
+    "moon_ok": true
+  },
+  {
+    "name": "M1 Crab Nebula",
+    "ra": "05:34:32",
+    "dec": "22:00:52",
+    "fun": 4,
+    "moon_ok": false
+  },
+  {
+    "name": "NGC 2392 Eskimo Nebula",
+    "ra": "07:29:11",
+    "dec": "20:54:42",
+    "fun": 4,
+    "moon_ok": true
+  },
+  {
+    "name": "NGC 6543 Cat's Eye",
+    "ra": "17:58:33",
+    "dec": "66:37:59",
+    "fun": 4,
+    "moon_ok": true
+  },
+  {
+    "name": "NGC 891 Edge-on Galaxy",
+    "ra": "02:22:33",
+    "dec": "42:20:57",
+    "fun": 4,
+    "moon_ok": false
+  },
+  {
+    "name": "NGC 4565 Needle Galaxy",
+    "ra": "12:36:21",
+    "dec": "25:59:16",
+    "fun": 4,
+    "moon_ok": false
+  },
+  {
+    "name": "M31 Andromeda core",
+    "ra": "00:42:44",
+    "dec": "41:16:09",
+    "fun": 4,
+    "moon_ok": false
+  },
+  {
+    "name": "M92 Globular",
+    "ra": "17:17:07",
+    "dec": "43:08:09",
+    "fun": 4,
+    "moon_ok": true
+  },
+  {
+    "name": "M3 Globular",
+    "ra": "13:42:11",
+    "dec": "28:22:38",
+    "fun": 4,
+    "moon_ok": true
+  },
+  {
+    "name": "M2 Globular",
+    "ra": "21:33:27",
+    "dec": "-00:49:24",
+    "fun": 4,
+    "moon_ok": true
+  },
+  {
+    "name": "M33 + NGC 604",
+    "ra": "01:33:51",
+    "dec": "30:39:37",
+    "fun": 3,
+    "moon_ok": false
+  },
+  {
+    "name": "NGC 7331 Galaxy",
+    "ra": "22:37:04",
+    "dec": "34:24:56",
+    "fun": 3,
+    "moon_ok": false
+  },
+  {
+    "name": "M76 Little Dumbbell",
+    "ra": "01:42:20",
+    "dec": "51:34:31",
+    "fun": 3,
+    "moon_ok": true
+  },
+  {
+    "name": "NGC 2403 Galaxy",
+    "ra": "07:36:51",
+    "dec": "65:36:09",
+    "fun": 3,
+    "moon_ok": false
+  },
+  {
+    "name": "M101 Pinwheel Galaxy",
+    "ra": "14:03:13",
+    "dec": "54:20:57",
+    "fun": 3,
+    "moon_ok": false
+  },
+  {
+    "name": "M64 Black Eye Galaxy",
+    "ra": "12:56:44",
+    "dec": "21:40:58",
+    "fun": 3,
+    "moon_ok": false
+  },
+  {
+    "name": "NGC 457 Owl Cluster",
+    "ra": "01:19:33",
+    "dec": "58:17:27",
+    "fun": 3,
+    "moon_ok": true
+  },
+  {
+    "name": "M35 Open Cluster",
+    "ra": "06:08:56",
+    "dec": "24:20:48",
+    "fun": 3,
+    "moon_ok": true
+  },
+  {
+    "name": "NGC 6946 Fireworks Galaxy",
+    "ra": "20:34:52",
+    "dec": "60:09:14",
+    "fun": 2,
+    "moon_ok": false
+  },
+  {
+    "name": "NGC 2419 Intergalactic Wanderer",
+    "ra": "07:38:08",
+    "dec": "38:52:55",
+    "fun": 2,
+    "moon_ok": false
+  },
+  {
+    "name": "IC 342 Galaxy",
+    "ra": "03:46:49",
+    "dec": "68:05:46",
+    "fun": 1,
+    "moon_ok": false
+  }
+]

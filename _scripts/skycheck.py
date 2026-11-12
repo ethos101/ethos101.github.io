@@ -58,37 +58,17 @@ Y, M = today.year, today.month
 LAB = calendar.month_name[M]
 nd = calendar.monthrange(Y, M)[1]
 
-# name, RA, Dec (J2000), fun 1-5, ok in moonlight
-T = [
-    ("M57 Ring Nebula", "18:53:35", "33:01:45", 5, 1),
-    ("M27 Dumbbell Nebula", "19:59:36", "22:43:16", 5, 1),
-    ("M81/M82 Bode's+Cigar", "09:55:33", "69:03:55", 5, 0),
-    ("M13 Hercules Cluster", "16:41:41", "36:27:37", 5, 1),
-    ("M15 Globular", "21:29:58", "12:10:01", 5, 1),
-    ("M42 Orion Nebula", "05:35:17", "-05:23:28", 5, 1),
-    ("M51 Whirlpool Galaxy", "13:29:53", "47:11:43", 4, 0),
-    ("NGC 7662 Blue Snowball", "23:25:54", "42:32:06", 4, 1),
-    ("M1 Crab Nebula", "05:34:32", "22:00:52", 4, 0),
-    ("NGC 2392 Eskimo Nebula", "07:29:11", "20:54:42", 4, 1),
-    ("NGC 6543 Cat's Eye", "17:58:33", "66:37:59", 4, 1),
-    ("NGC 891 Edge-on Galaxy", "02:22:33", "42:20:57", 4, 0),
-    ("NGC 4565 Needle Galaxy", "12:36:21", "25:59:16", 4, 0),
-    ("M31 Andromeda core", "00:42:44", "41:16:09", 4, 0),
-    ("M92 Globular", "17:17:07", "43:08:09", 4, 1),
-    ("M3 Globular", "13:42:11", "28:22:38", 4, 1),
-    ("M2 Globular", "21:33:27", "-00:49:24", 4, 1),
-    ("M33 + NGC 604", "01:33:51", "30:39:37", 3, 0),
-    ("NGC 7331 Galaxy", "22:37:04", "34:24:56", 3, 0),
-    ("M76 Little Dumbbell", "01:42:20", "51:34:31", 3, 1),
-    ("NGC 2403 Galaxy", "07:36:51", "65:36:09", 3, 0),
-    ("M101 Pinwheel Galaxy", "14:03:13", "54:20:57", 3, 0),
-    ("M64 Black Eye Galaxy", "12:56:44", "21:40:58", 3, 0),
-    ("NGC 457 Owl Cluster", "01:19:33", "58:17:27", 3, 1),
-    ("M35 Open Cluster", "06:08:56", "24:20:48", 3, 1),
-    ("NGC 6946 Fireworks Galaxy", "20:34:52", "60:09:14", 2, 0),
-    ("NGC 2419 Intergalactic Wanderer", "07:38:08", "38:52:55", 2, 0),
-    ("IC 342 Galaxy", "03:46:49", "68:05:46", 1, 0),
-]
+# Targets live in _data/targets.json so they can be edited without touching code.
+TARGETS_FILE = os.path.normpath(os.path.join(HERE, "..", "_data", "targets.json"))
+try:
+    with open(TARGETS_FILE, encoding="utf-8") as f:
+        _targets = json.load(f)
+    T = [
+        (d["name"], d["ra"], d["dec"], int(d.get("fun", 3)), bool(d.get("moon_ok", True)))
+        for d in _targets
+    ]
+except (OSError, KeyError, TypeError, ValueError) as e:
+    raise SystemExit(f"ERROR: could not load targets from {TARGETS_FILE}: {e}")
 
 obs = ephem.Observer()
 obs.lat, obs.lon, obs.elevation = LAT, LON, 400
