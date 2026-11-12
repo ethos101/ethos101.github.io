@@ -1,0 +1,7 @@
+[Unit]
+Description=Stargazing forecast update
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/user/ethos101.github.io/_scripts
+ExecStart=/home/user/ethos101.github.io/_scripts/run_skycheck.sh

@@ -24,12 +24,14 @@ def ensure_venv():
         subprocess.check_call([sys.executable, "-m", "venv", VENV])
     need = subprocess.run([VENV_PY, "-c", "import ephem, playwright"], capture_output=True)
     if need.returncode != 0:
-        subprocess.check_call([VENV_PY, "-m", "pip", "install", "--quiet", "ephem", "playwright"])
+        req = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
+        pkgs = ["-r", req] if os.path.exists(req) else ["ephem", "playwright"]
+        subprocess.check_call([VENV_PY, "-m", "pip", "install", "--quiet", *pkgs])
     os.execv(VENV_PY, [VENV_PY, *sys.argv])
 
 ensure_venv()
 
-import math, json, calendar, datetime as dt, urllib.request, html
+import math, json, calendar, datetime as dt, urllib.request, urllib.error, html, time
 from zoneinfo import ZoneInfo
 import ephem
 
@@ -40,6 +42,8 @@ PLACE = "Central Minnesota"
 MAX_CLOUD, MAX_WIND, MAX_GUST = 30, 10, 20
 MIN_VIS_M, MIN_DEW_SPREAD_F = 5000, 3
 CHROME = "/usr/bin/google-chrome"
+# Extra models used only to flag forecast disagreement (the main forecast stays best-match).
+MODELS = ["ecmwf_ifs025", "gfs_seamless", "icon_seamless"]
 # ---------------------------
 
 NIGHTS = int(sys.argv[1]) if len(sys.argv) > 1 else 7
@@ -49,7 +53,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 os.chdir(HERE)
 
 tz = ZoneInfo(TZ_NAME)
-today = dt.date.today()
+today = dt.datetime.now(tz).date()
 Y, M = today.year, today.month
 LAB = calendar.month_name[M]
 nd = calendar.monthrange(Y, M)[1]
@@ -100,13 +104,45 @@ def body(ra, de):
     b._ra, b._dec, b._epoch = ra, de, ephem.J2000
     return b
 
+def fetch_json(url, tries=3, timeout=30):
+    """Fetch JSON with a timeout and a few retries, so a bad network can't hang cron."""
+    last = None
+    for i in range(tries):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as r:
+                return json.load(r)
+        except Exception as e:
+            last = e
+            if i + 1 < tries:
+                time.sleep(5 * (i + 1))
+    raise SystemExit(f"ERROR: weather fetch failed after {tries} tries: {last}")
+
+def longest_run(times, step):
+    """Return (start, end) of the longest consecutive run, or None."""
+    if not times:
+        return None
+    best = cur = [times[0]]
+    for t in times[1:]:
+        if t - cur[-1] == step:
+            cur.append(t)
+        else:
+            if len(cur) > len(best):
+                best = cur
+            cur = [t]
+    if len(cur) > len(best):
+        best = cur
+    return best[0], best[-1] + step
+
+def models_disagree(w, cloud_spread=30, gust_spread=10):
+    return w.get("cspread", 0) > cloud_spread or w.get("gspread", 0) > gust_spread
+
 days = min(NIGHTS + 1, 16)
 url = (
     f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}"
     f"&hourly=cloud_cover,wind_speed_10m,wind_gusts_10m,visibility,temperature_2m,dew_point_2m"
     f"&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone={TZ_NAME}&forecast_days={days}"
 )
-hourly = json.load(urllib.request.urlopen(url))["hourly"]
+hourly = fetch_json(url)["hourly"]
 wx = {}
 for i, t in enumerate(hourly["time"]):
     wx[dt.datetime.fromisoformat(t).replace(tzinfo=tz)] = dict(
@@ -116,7 +152,34 @@ for i, t in enumerate(hourly["time"]):
         vis=hourly["visibility"][i],
         temp=hourly["temperature_2m"][i],
         dew=hourly["dew_point_2m"][i],
+        cspread=0.0,
+        gspread=0.0,
     )
+
+# Optional cross-model spread: keeps the best-match forecast, but flags nights
+# where the big models disagree so the calendar doesn't look falsely certain.
+try:
+    murl = (
+        f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}"
+        f"&hourly=cloud_cover,wind_speed_10m,wind_gusts_10m&models={','.join(MODELS)}"
+        f"&wind_speed_unit=mph&timezone={TZ_NAME}&forecast_days={days}"
+    )
+    mh = fetch_json(murl, tries=2, timeout=20)["hourly"]
+    models = [m for m in MODELS if f"cloud_cover_{m}" in mh]
+    if len(models) > 1:
+        def spread(series):
+            vals = [v for v in series if v is not None]
+            return (max(vals) - min(vals)) if vals else 0.0
+        for i, t in enumerate(mh["time"]):
+            key = dt.datetime.fromisoformat(t).replace(tzinfo=tz)
+            if key not in wx:
+                continue
+            cs = [mh[f"cloud_cover_{m}"][i] for m in models]
+            gs = [mh[f"wind_gusts_10m_{m}"][i] for m in models]
+            wx[key]["cspread"] = spread(cs)
+            wx[key]["gspread"] = spread(gs)
+except Exception as e:
+    print(f"note: multi-model confidence unavailable ({e})", file=sys.stderr)
 
 # --- text GO/No-Go check (30° cutoff, before midnight) ---
 now = dt.datetime.now(tz)
@@ -126,6 +189,7 @@ if now.hour < 6:
 step = dt.timedelta(minutes=10)
 bodies = [(n, body(ra, de), f, mo) for n, ra, de, f, mo in T]
 results = []
+night_log = []
 for d in range(NIGHTS):
     n0 = start + dt.timedelta(days=d)
     dark, t = [], n0
@@ -139,8 +203,11 @@ for d in range(NIGHTS):
     obs.date = ephem.Date(mid.astimezone(dt.timezone.utc).replace(tzinfo=None))
     moon.compute(obs)
     illum = moon.moon_phase * 100
+    session_end = n0 + dt.timedelta(hours=12)  # sessions end at midnight
     good, moonfree, hrs, lows = [], [], [], []
     for t in dark:
+        if t >= session_end:
+            break
         w = wx.get(t.replace(minute=0))
         if not w:
             continue
@@ -162,17 +229,27 @@ for d in range(NIGHTS):
     gh = len(good) * step.seconds / 3600
     rating = "GO" if gh >= 3 else ("MAYBE" if gh >= 1 else "NO")
     conf = "" if d < 3 else " (low confidence)"
+    if any(models_disagree(w) for w in hrs):
+        conf += " (models disagree)"
+    night_log.append(dict(
+        date=n0.strftime("%Y-%m-%d"), rating=rating,
+        good_hours=round(gh, 1), low_f=round(min(lows)), note=conf.strip(),
+        evening=[dict(time=t.strftime("%H:%M"), cloud=w["cloud"], wind=w["wind"],
+                      gust=w["gust"], cloud_spread=w["cspread"], gust_spread=w["gspread"])
+                 for t, w in sorted(wx.items()) if t.date() == n0.date() and 18 <= t.hour <= 23],
+    ))
     if rating == "GO":
-        results.append((n0, conf, good, set(moonfree), min(lows)))
+        results.append((n0, conf, good, set(moonfree), min(lows), longest_run(good, step)))
 
 fmt = lambda t: t.strftime("%-I:%M %p").lower()
 print(f"Go / No-Go · {LAB} · {PLACE}")
 print(f"Clear ≤{MAX_CLOUD}% cloud, wind <{MAX_WIND} mph, gusts <{MAX_GUST}. Targets above {MIN_ALT:.0f}° before midnight.")
+print("Session check uses dark hours before midnight; the calendar uses 6–11 PM averages.")
 print()
 if not results:
     print("No GO nights in the forecast.")
 else:
-    for n0, conf, good, mfree, low in results:
+    for n0, conf, good, mfree, low, win in results:
         picks = []
         for name, b, fun, moonok in bodies:
             up = [
@@ -190,15 +267,33 @@ else:
             print(f"GO {n0:%a %b %-d}{conf}: (no targets above cutoff)")
             continue
         name, a, z = picks[0][2], picks[0][3], picks[0][4]
+        rec = next(r for r in night_log if r["date"] == n0.strftime("%Y-%m-%d"))
+        rec.update(best_target=name, window_start=fmt(win[0]), window_end=fmt(win[1]))
+        window = f"longest {fmt(win[0])}-{fmt(win[1])}, " if win else ""
         print(
             f"GO {n0:%a %b %-d}{conf}: {name}, {fmt(a)}-{fmt(z)} "
-            f"(clear {fmt(good[0])}-{fmt(good[-1] + step)}, low {low:.0f}F)"
+            f"(clear {len(good) * step.seconds / 3600:.1f}h, {window}low {low:.0f}F)"
         )
+
+# --- save a small history record for later forecast-vs-actual checks ---
+try:
+    hist_dir = os.path.expanduser("~/.local/share/skycheck/history")
+    os.makedirs(hist_dir, exist_ok=True)
+    with open(os.path.join(hist_dir, f"{today.isoformat()}.json"), "w") as f:
+        json.dump(dict(
+            generated=dt.datetime.now(tz).isoformat(timespec="seconds"),
+            place=PLACE, forecast_days=days, models=MODELS,
+            settings=dict(max_cloud=MAX_CLOUD, max_wind=MAX_WIND, max_gust=MAX_GUST,
+                          min_visibility_m=MIN_VIS_M, min_dew_spread_f=MIN_DEW_SPREAD_F),
+            nights=night_log,
+        ), f, indent=2)
+except Exception as e:
+    print(f"note: could not save history ({e})", file=sys.stderr)
 
 # --- month graphic (horizon trails, public-facing) ---
 W = {}
 for t, w in wx.items():
-    W[t] = (w["cloud"], w["wind"], w["gust"])
+    W[t] = (w["cloud"], w["wind"], w["gust"], w["cspread"], w["gspread"])
 
 mn = ephem.Moon()
 # Calendar covers only days with an evening forecast, starting today.
@@ -247,7 +342,8 @@ for day in dates:
     c = sum(x[0] for x in hrs) / len(hrs)
     w = max(x[1] for x in hrs)
     g = max(x[2] for x in hrs)
-    ok = c <= MAX_CLOUD and w < MAX_WIND and g < MAX_GUST
+    disagree = sum(1 for x in hrs if x[3] > 30 or x[4] > 10) > len(hrs) / 2
+    ok = c <= MAX_CLOUD and w < MAX_WIND and g < MAX_GUST and not disagree
     cls = "g" if ok else ("y" if c <= 60 and w < 15 else "rd")
     wxcell = f'<div class="x">☁ {c:.0f}%</div><div class="x">💨 {w:.0f}</div>'
     if ok:
@@ -348,9 +444,9 @@ H = f'''<html><head><style>body{{margin:0;background:linear-gradient(#070b1f,#11
 .sk{{text-align:center}} .kr{{display:flex;align-items:center;font-size:34px;line-height:1.8;border-bottom:1px solid #26315e}} .kd{{width:44px;height:44px;border-radius:22px;color:#0b1230;font-weight:800;text-align:center;line-height:44px;margin-right:16px}} .f{{font-size:27px;color:#9fb0e6;margin-top:22px;line-height:1.6}} .o{{flex:1}} .t{{width:200px;text-align:right;color:#9fb0e6}}</style></head><body><div class="w">
 <h1>Go / No-Go</h1><div class="sub">{PLACE} · Deep-sky targets · {rng} · updated {today:%b %-d}</div>
 <div class="cal">{"".join(f'<div class="hd">{x}</div>' for x in "SMTWTFS")}{pad}{cells}</div>
-<div class="k"><span class="ch g2">Clear + calm</span><span class="ch y2">Iffy</span><span class="ch r2">No</span><span class="kt">Moon icon + when it rises/sets 6 PM–midnight · ☁ cloud % · 💨 wind mph · 6 PM–midnight</span></div>
+<div class="k"><span class="ch g2">Clear + calm</span><span class="ch y2">Iffy</span><span class="ch r2">No</span><span class="kt">Moon icon + when it rises/sets 6 PM–midnight · ☁ cloud % · 💨 wind mph · green = 6–11 PM average · yellow also means models disagree</span></div>
 <h2>Top 5 targets · sky at 8 PM</h2><div class="h2s">A short list: the 5 most fun deep-sky targets that are up after the sky is fully dark (sun 18° down, {dark[0].strftime('%-I:%M')} mid-month). Dots show 8 PM.</div><div class="sk">{sv}</div><div class="c">{key}</div>
-<div class="f"><div>🕘 Times PM, mid-month (~1 hr earlier by {LAB[:3]} {nd})</div><div>Map = looking straight up, N at top. Center = overhead. Trails = path through the dark night, labels = start/end of darkness or rise/set. White square = midnight.</div><div>🌙 = still visible with the moon up</div></div></div></body></html>'''
+<div class="f"><div>🕘 Times PM, mid-month (~1 hr earlier by {LAB[:3]} {nd})</div><div>Map = looking straight up, N at top. Center = overhead. Trails = path through the dark night, labels = start/end of darkness or rise/set. White square = midnight.</div><div>🌙 = still visible with the moon up · Weather data: Open-Meteo (CC BY 4.0) · Forecast guidance only</div></div></div></body></html>'''
 
 html_path = os.path.join(HERE, "month.html")
 png_name = f"month_{LAB[:3].lower()}.png"
