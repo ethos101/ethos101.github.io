@@ -1,7 +1,13 @@
 [Unit]
 Description=Stargazing forecast update
+# A 5 AM run can hit a network that isn't up yet; retry a few times before
+# giving up for the day. (4 attempts within an hour, 5 minutes apart.)
+StartLimitIntervalSec=3600
+StartLimitBurst=4
 
 [Service]
 Type=oneshot
 WorkingDirectory=/home/user/ethos101.github.io/_scripts
 ExecStart=/home/user/ethos101.github.io/_scripts/run_skycheck.sh
+Restart=on-failure
+RestartSec=5min

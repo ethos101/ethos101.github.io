@@ -84,8 +84,16 @@ def body(ra, de):
     b._ra, b._dec, b._epoch = ra, de, ephem.J2000
     return b
 
-def fetch_json(url, tries=3, timeout=30):
-    """Fetch JSON with a timeout and a few retries, so a bad network can't hang cron."""
+class FetchError(RuntimeError):
+    """Raised when a URL cannot be fetched after all retries."""
+
+
+def fetch_json(url, tries=5, timeout=45):
+    """Fetch JSON with a timeout and exponential-backoff retries.
+
+    A 5 AM run can hit a router or TLS handshake that is still waking up, so
+    ride out multi-minute outages instead of failing the whole day's forecast.
+    """
     last = None
     for i in range(tries):
         try:
@@ -94,8 +102,11 @@ def fetch_json(url, tries=3, timeout=30):
         except Exception as e:
             last = e
             if i + 1 < tries:
-                time.sleep(5 * (i + 1))
-    raise SystemExit(f"ERROR: weather fetch failed after {tries} tries: {last}")
+                delay = min(15 * 2 ** i, 120)
+                print(f"weather fetch attempt {i + 1}/{tries} failed: {e}; "
+                      f"retrying in {delay}s", flush=True)
+                time.sleep(delay)
+    raise FetchError(f"weather fetch failed after {tries} tries: {last}")
 
 def longest_run(times, step):
     """Return (start, end) of the longest consecutive run, or None."""
@@ -122,7 +133,10 @@ url = (
     f"&hourly=cloud_cover,wind_speed_10m,wind_gusts_10m,visibility,temperature_2m,dew_point_2m"
     f"&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone={TZ_NAME}&forecast_days={days}"
 )
-hourly = fetch_json(url)["hourly"]
+try:
+    hourly = fetch_json(url)["hourly"]
+except FetchError as e:
+    raise SystemExit(f"ERROR: {e}")
 wx = {}
 for i, t in enumerate(hourly["time"]):
     wx[dt.datetime.fromisoformat(t).replace(tzinfo=tz)] = dict(
