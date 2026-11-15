@@ -7,6 +7,7 @@ REPO="/home/user/ethos101.github.io"
 SCRIPT_DIR="$REPO/_scripts"
 OUT="$SCRIPT_DIR/out.log"
 INCLUDE="$REPO/_includes/forecast_status.html"
+ABOUT="$REPO/_posts/1900-01-01-about.md"
 POST_URL="https://willowcreekobservatory.com/about/"
 MAIL_TO="${SKYCHECK_MAIL_TO:-ethos101@gmail.com}"
 MAIL_FROM="${SKYCHECK_MAIL_FROM:-ethos101@gmail.com}"
@@ -53,7 +54,8 @@ fi
 cp "$latest" "$REPO/images/month.png"
 
 # 3. Write a short text summary for the post (so it isn't image-only).
-stamp=$(date '+%b %-d')
+today=$(date '+%Y-%m-%d')
+stamp=$(date -d "$today" '+%b %-d')
 if grep -q '^GO ' "$OUT"; then
     summary="Next good night: $(grep -m1 '^GO ' "$OUT" | sed 's/^GO //')"
 else
@@ -64,11 +66,18 @@ cat >"$INCLUDE" <<EOF
 <p class="small">Weather data: <a href="https://open-meteo.com/">Open-Meteo</a> (CC BY 4.0). Forecast guidance only — check the sky before heading out.</p>
 EOF
 
+# Keep the post's displayed date in step with today's forecast update.
+if [ -f "$ABOUT" ]; then
+    sed -i -E "s/^date: .*/date: $today/" "$ABOUT"
+fi
+
 # 4. Commit and push only the published files (never sweep in other staged work).
 push_note=""
-git -C "$REPO" add images/month.png "$INCLUDE"
-if ! git -C "$REPO" diff --cached --quiet -- images/month.png "$INCLUDE"; then
-    if git -C "$REPO" commit --only -m "Update stargazing forecast ($stamp)" -- images/month.png "$INCLUDE" >>"$OUT" 2>&1; then
+publish=(images/month.png "$INCLUDE")
+[ -f "$ABOUT" ] && publish+=("$ABOUT")
+git -C "$REPO" add "${publish[@]}"
+if ! git -C "$REPO" diff --cached --quiet -- "${publish[@]}"; then
+    if git -C "$REPO" commit --only -m "Update stargazing forecast ($stamp)" -- "${publish[@]}" >>"$OUT" 2>&1; then
         if ! git -C "$REPO" push origin main >>"$OUT" 2>&1; then
             push_note="WARNING: forecast committed locally but git push failed."
             echo "$push_note" >>"$OUT"

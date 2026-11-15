@@ -12,7 +12,8 @@ month graphic published at `/images/month.png`.
 
 The script bootstraps `~/.skycheck-venv` from `requirements.txt` on first run.
 
-To do the full update (publish the image, refresh the post summary, email it):
+To do the full update (publish the image, refresh the post summary and date,
+email it):
 
 ```bash
 ./run_skycheck.sh
@@ -80,6 +81,7 @@ time, plus GO-call precision and a recent-nights table.
 | `_scripts/out.log` | no (ignored) | Last run log |
 | `images/month.png` | yes | Image shown on the post |
 | `_includes/forecast_status.html` | yes | Text summary shown on the post |
+| `_posts/1900-01-01-about.md` | yes | Post date refreshed on each run |
 | `~/.local/share/skycheck/history/*.json` | no | Forecast history (one file per run) |
 | `~/.local/share/skycheck/history/accuracy.{json,html}` | no | Forecast-vs-actual report |
 
