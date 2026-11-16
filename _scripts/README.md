@@ -33,25 +33,60 @@ The target list lives in `../_data/targets.json`:
 
 Edit that file and commit it; the next run picks it up. No code changes needed.
 
-## Scheduling
+## Cloud and smoke
 
-Two user systemd timers are installed and enabled:
+The forecast asks Open-Meteo for cloud cover split into low, mid, and high
+layers. A single number hides the difference between a solid low deck and thin
+cirrus, so the script uses a weighted value for its GO decision and calendar
+colours:
 
-```bash
-systemctl --user list-timers 'skycheck*'
-systemctl --user start skycheck.service          # run the forecast now
-systemctl --user start skycheck-verify.service   # rebuild accuracy report now
-journalctl --user -u skycheck.service -n 50
+```text
+effective = max(low, 0.8 × mid, 0.4 × high, 0.6 × total)
 ```
 
-- `skycheck.timer` runs daily at 05:00 America/Chicago with `Persistent=true`,
-  so a run missed because the machine was asleep happens after the next boot.
-- `skycheck-verify.timer` runs weekly on Sunday at 06:00 and rebuilds the
-  accuracy report.
+Low cloud counts fully, mid cloud loses 20%, high cirrus loses 60%, and the
+total sets a floor so an overcast high deck can't look clear. The graphic shows
+this weighted percentage.
 
-Unit files live in `systemd/` and are installed in
-`~/.config/systemd/user/`. Linger is enabled so the timers run while logged out.
-The old crontab entry has been removed.
+It also fetches PM2.5 and aerosol optical depth from Open-Meteo's air-quality
+API (up to 7 days). A night is marked smoky when either exceeds its threshold:
+
+- PM2.5 > 35 µg/m³
+- AOD > 0.4
+
+Both layers and smoke data are optional: if the API is unavailable, the script
+falls back to total cloud and no smoke signal. History records keep the raw
+layers, PM2.5, AOD, and the weighted value so the accuracy report can compare
+like with like.
+
+## Scheduling
+
+Scheduling is handled by the user crontab. Check it with:
+
+```bash
+crontab -l
+```
+
+The active entries are:
+
+```cron
+0 5 * * * /home/user/ethos101.github.io/_scripts/run_skycheck.sh >> /home/user/ethos101.github.io/_scripts/out.log 2>&1
+0 6 * * 0 /usr/bin/python3 /home/user/ethos101.github.io/_scripts/verify_forecast.py >> /home/user/.local/share/skycheck/verify.log 2>&1 || mailx -r ethos101@gmail.com -s "Forecast verification failed" ethos101@gmail.com < /home/user/.local/share/skycheck/verify.log
+```
+
+- The daily job runs at 05:00 America/Chicago via `run_skycheck.sh`, which
+  generates the forecast, publishes the image/summary, commits, pushes, and
+  emails the result. The wrapper sends its own mail, so cron output is only
+  appended to `out.log`.
+- The weekly job runs Sunday at 06:00 and rebuilds the accuracy report. If it
+  fails, cron emails the log.
+
+Adjust the times with `crontab -e`. The wrapper uses `flock`, so an overlapping
+manual run is skipped rather than corrupting the output.
+
+The optional systemd units in `systemd/` are kept for reference but are not
+installed. If you prefer timers later, copy them to `~/.config/systemd/user/`,
+enable them, and remove the cron entries so the job doesn't run twice.
 
 ## Forecast accuracy
 
@@ -69,8 +104,10 @@ Run it manually with:
 ./verify_forecast.py --history-dir /tmp/skycheck-test
 ```
 
-The report shows cloud-cover error and green/no-green accuracy by forecast lead
-time, plus GO-call precision and a recent-nights table.
+The report shows weighted cloud-cover error and green/no-green accuracy by
+forecast lead time, plus GO-call precision and a recent-nights table. The
+archive is also split into low/mid/high layers and weighted the same way, so the
+comparison is consistent with the forecast.
 
 ## What gets written
 

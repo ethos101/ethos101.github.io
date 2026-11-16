@@ -52,13 +52,24 @@ def load_history(history_dir):
     return runs
 
 
+def effective_cloud(h):
+    """Same layer weighting skycheck.py uses for its GO decision."""
+    total = h.get("cloud") or 0
+    vals = [0.6 * total]
+    for key, weight in (("cloud_low", 1.0), ("cloud_mid", 0.8), ("cloud_high", 0.4)):
+        if h.get(key) is not None:
+            vals.append(weight * h[key])
+    return min(100.0, max(vals))
+
+
 def fetch_actuals(start, end):
     if start > end:
         return {}
     url = (
         f"https://archive-api.open-meteo.com/v1/archive?latitude={LAT}&longitude={LON}"
         f"&start_date={start.isoformat()}&end_date={end.isoformat()}"
-        f"&hourly=cloud_cover,wind_speed_10m,wind_gusts_10m"
+        f"&hourly=cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
+        f"wind_speed_10m,wind_gusts_10m"
         f"&wind_speed_unit=mph&timezone={TZ_NAME}"
     )
     hourly = fetch_json(url)["hourly"]
@@ -69,16 +80,29 @@ def fetch_actuals(start, end):
             out.setdefault(d.date(), []).append(dict(
                 hour=d.hour,
                 cloud=hourly["cloud_cover"][i],
+                cloud_low=hourly["cloud_cover_low"][i],
+                cloud_mid=hourly["cloud_cover_mid"][i],
+                cloud_high=hourly["cloud_cover_high"][i],
                 wind=hourly["wind_speed_10m"][i],
                 gust=hourly["wind_gusts_10m"][i],
             ))
     return out
 
 
+def hour_cloud(h):
+    # New history stores the weighted value; archive rows get it computed from
+    # layers; very old history only has total cover, so use that.
+    if "effective_cloud" in h:
+        return h["effective_cloud"]
+    if any(h.get(k) is not None for k in ("cloud_low", "cloud_mid", "cloud_high")):
+        return effective_cloud(h)
+    return h["cloud"]
+
+
 def summarize(hours):
     if not hours or any(h.get(k) is None for h in hours for k in ("cloud", "wind", "gust")):
         return None
-    cloud = sum(h["cloud"] for h in hours) / len(hours)
+    cloud = sum(hour_cloud(h) for h in hours) / len(hours)
     wind = max(h["wind"] for h in hours)
     gust = max(h["gust"] for h in hours)
     return dict(
@@ -168,7 +192,7 @@ def svg_chart(leads):
     return (
         f'<svg viewBox="0 0 {width} {height}" width="100%" role="img" aria-label="Mean absolute cloud error by forecast lead time">'
         f'<line x1="{pad}" y1="{height-pad}" x2="{width-pad}" y2="{height-pad}" stroke="#3a4a85"/>'
-        f'<text x="{pad}" y="20" fill="#9fb0e6" font-size="13">Mean absolute cloud-cover error (%) by lead time</text>'
+        f'<text x="{pad}" y="20" fill="#9fb0e6" font-size="13">Mean absolute weighted cloud-cover error (%) by lead time</text>'
         + "".join(bars) + "</svg>"
     )
 
@@ -177,7 +201,7 @@ def write_html(path, report):
     o = report["overall"]
     summary = (
         f'{o["samples"]} forecasts over {o["nights"]} nights · '
-        f'cloud MAE {o["cloud_mae"]}% · green accuracy {o["green_accuracy"]}%'
+        f'weighted cloud MAE {o["cloud_mae"]}% · green accuracy {o["green_accuracy"]}%'
         if o["samples"] else
         "No verified nights yet — archive data usually lags about 5 days."
     )
@@ -208,7 +232,7 @@ table{{width:100%;border-collapse:collapse;font-size:14px}} th,td{{text-align:le
 th{{color:#9fb0e6;font-weight:600}}
 </style></head><body><div class="w">
 <h1>Forecast accuracy</h1>
-<div class="muted">Generated {report["generated"]} · green = 6–11 PM average cloud ≤{MAX_CLOUD}%, wind &lt;{MAX_WIND}, gust &lt;{MAX_GUST}</div>
+<div class="muted">Generated {report["generated"]} · green = 6–11 PM weighted cloud ≤{MAX_CLOUD}%, wind &lt;{MAX_WIND}, gust &lt;{MAX_GUST}</div>
 <div class="card"><strong>{summary}</strong><br><span class="muted">{go}</span></div>
 <h2>Skill by lead time</h2>
 <div class="card">{chart}</div>
@@ -261,7 +285,8 @@ def main():
     o = report["overall"]
     if o["samples"]:
         print(f"Verified {o['samples']} forecasts over {o['nights']} nights.")
-        print(f"Cloud MAE {o['cloud_mae']}% · green accuracy {o['green_accuracy']}% · GO precision {o['go_precision']}%")
+        go = f"{o['go_precision']}%" if o["go_precision"] is not None else "n/a"
+        print(f"Weighted cloud MAE {o['cloud_mae']}% · green accuracy {o['green_accuracy']}% · GO precision {go}")
     else:
         print("No verified nights yet (archive data lags ~5 days).")
     print(f"Report: {html_path}")

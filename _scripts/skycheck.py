@@ -41,6 +41,7 @@ TZ_NAME = "America/Chicago"
 PLACE = "Central Minnesota"
 MAX_CLOUD, MAX_WIND, MAX_GUST = 30, 10, 20
 MIN_VIS_M, MIN_DEW_SPREAD_F = 5000, 3
+MAX_PM25, MAX_AOD = 35, 0.4  # smoke / aerosol thresholds when data is available
 CHROME = os.environ.get("SKYCHECK_CHROME", "/usr/bin/google-chrome")
 # Extra models used only to flag forecast disagreement (the main forecast stays best-match).
 MODELS = ["ecmwf_ifs025", "gfs_seamless", "icon_seamless"]
@@ -127,25 +128,66 @@ def longest_run(times, step):
 def models_disagree(w, cloud_spread=30, gust_spread=10):
     return w.get("cspread", 0) > cloud_spread or w.get("gspread", 0) > gust_spread
 
+def effective_cloud(w):
+    """Cloud that actually matters for observing.
+
+    Low cloud is opaque and blocks the sky, mid cloud mostly does, high cirrus
+    costs some contrast but is much less damaging. The total still sets a floor
+    so a fully overcast high deck can't look clear just because the layers are
+    split evenly.
+    """
+    total = w.get("cloud") or 0
+    layers = ("cloud_low", "cloud_mid", "cloud_high")
+    if all(w.get(k) is None for k in layers):
+        return total  # no layer data: fall back to total cover
+    vals = [0.6 * total]
+    if w.get("cloud_low") is not None:
+        vals.append(w["cloud_low"])
+    if w.get("cloud_mid") is not None:
+        vals.append(0.8 * w["cloud_mid"])
+    if w.get("cloud_high") is not None:
+        vals.append(0.4 * w["cloud_high"])
+    return min(100.0, max(vals))
+
+def smoke_level(w):
+    """1.0 means at the threshold; >1 means smoke/haze is likely a problem."""
+    ratios = []
+    if w.get("pm25") is not None:
+        ratios.append(w["pm25"] / MAX_PM25)
+    if w.get("aod") is not None:
+        ratios.append(w["aod"] / MAX_AOD)
+    return max(ratios) if ratios else 0.0
+
 days = min(NIGHTS + 1, 16)
 url = (
     f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}"
-    f"&hourly=cloud_cover,wind_speed_10m,wind_gusts_10m,visibility,temperature_2m,dew_point_2m"
+    f"&hourly=cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
+    f"wind_speed_10m,wind_gusts_10m,visibility,temperature_2m,dew_point_2m"
     f"&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone={TZ_NAME}&forecast_days={days}"
 )
 try:
     hourly = fetch_json(url)["hourly"]
 except FetchError as e:
     raise SystemExit(f"ERROR: {e}")
+def hourly_at(name, i):
+    """Read an optional hourly series without crashing if it is absent."""
+    series = hourly.get(name)
+    return series[i] if series and i < len(series) else None
+
 wx = {}
 for i, t in enumerate(hourly["time"]):
     wx[dt.datetime.fromisoformat(t).replace(tzinfo=tz)] = dict(
         cloud=hourly["cloud_cover"][i],
+        cloud_low=hourly_at("cloud_cover_low", i),
+        cloud_mid=hourly_at("cloud_cover_mid", i),
+        cloud_high=hourly_at("cloud_cover_high", i),
         wind=hourly["wind_speed_10m"][i],
         gust=hourly["wind_gusts_10m"][i],
         vis=hourly["visibility"][i],
         temp=hourly["temperature_2m"][i],
         dew=hourly["dew_point_2m"][i],
+        pm25=None,
+        aod=None,
         cspread=0.0,
         gspread=0.0,
     )
@@ -174,6 +216,30 @@ try:
             wx[key]["gspread"] = spread(gs)
 except Exception as e:
     print(f"note: multi-model confidence unavailable ({e})", file=sys.stderr)
+
+# Optional smoke/haze data. The air-quality endpoint only forecasts 7 days and
+# can return nulls at the end of that range; missing values simply mean "no
+# smoke signal" rather than a failed forecast.
+try:
+    aurl = (
+        f"https://air-quality-api.open-meteo.com/v1/air-quality?latitude={LAT}&longitude={LON}"
+        f"&hourly=pm2_5,aerosol_optical_depth&timezone={TZ_NAME}"
+        f"&forecast_days={min(days, 7)}"
+    )
+    ah = fetch_json(aurl, tries=2, timeout=20)["hourly"]
+    pm = ah.get("pm2_5", [])
+    aod = ah.get("aerosol_optical_depth", [])
+    for i, t in enumerate(ah["time"]):
+        key = dt.datetime.fromisoformat(t).replace(tzinfo=tz)
+        if key in wx:
+            wx[key]["pm25"] = pm[i] if i < len(pm) else None
+            wx[key]["aod"] = aod[i] if i < len(aod) else None
+except Exception as e:
+    print(f"note: smoke/haze data unavailable ({e})", file=sys.stderr)
+
+for _w in wx.values():
+    _w["eff"] = round(effective_cloud(_w))
+    _w["smoke"] = smoke_level(_w) >= 1
 
 # --- text GO/No-Go check (30° cutoff, before midnight) ---
 now = dt.datetime.now(tz)
@@ -208,11 +274,12 @@ for d in range(NIGHTS):
         hrs.append(w)
         lows.append(w["temp"])
         ok = (
-            w["cloud"] <= MAX_CLOUD
+            w["eff"] <= MAX_CLOUD
             and w["wind"] < MAX_WIND
             and w["gust"] < MAX_GUST
             and (w["vis"] or 0) >= MIN_VIS_M
             and (w["temp"] - w["dew"]) >= MIN_DEW_SPREAD_F
+            and not w["smoke"]
         )
         if ok:
             good.append(t)
@@ -228,8 +295,12 @@ for d in range(NIGHTS):
     night_log.append(dict(
         date=n0.strftime("%Y-%m-%d"), rating=rating,
         good_hours=round(gh, 1), low_f=round(min(lows)), note=conf.strip(),
-        evening=[dict(time=t.strftime("%H:%M"), cloud=w["cloud"], wind=w["wind"],
-                      gust=w["gust"], cloud_spread=w["cspread"], gust_spread=w["gspread"])
+        smoke=any(w["smoke"] for w in hrs),
+        evening=[dict(time=t.strftime("%H:%M"), cloud=w["cloud"], effective_cloud=w["eff"],
+                      cloud_low=w["cloud_low"], cloud_mid=w["cloud_mid"], cloud_high=w["cloud_high"],
+                      wind=w["wind"], gust=w["gust"],
+                      pm25=w["pm25"], aod=w["aod"], smoke=w["smoke"],
+                      cloud_spread=w["cspread"], gust_spread=w["gspread"])
                  for t, w in sorted(wx.items()) if t.date() == n0.date() and 18 <= t.hour <= 23],
     ))
     if rating == "GO":
@@ -237,7 +308,8 @@ for d in range(NIGHTS):
 
 fmt = lambda t: t.strftime("%-I:%M %p").lower()
 print(f"Go / No-Go · {LAB} · {PLACE}")
-print(f"Clear ≤{MAX_CLOUD}% cloud, wind <{MAX_WIND} mph, gusts <{MAX_GUST}. Targets above {MIN_ALT:.0f}° before midnight.")
+print(f"Clear ≤{MAX_CLOUD}% weighted cloud, wind <{MAX_WIND} mph, gusts <{MAX_GUST}, no smoke. Targets above {MIN_ALT:.0f}° before midnight.")
+print("Cloud is weighted toward low/mid layers; high cirrus counts less. Smoke uses PM2.5/AOD when available.")
 print("Session check uses dark hours before midnight; the calendar uses 6–11 PM averages.")
 print()
 if not results:
@@ -278,7 +350,8 @@ try:
             generated=dt.datetime.now(tz).isoformat(timespec="seconds"),
             place=PLACE, forecast_days=days, models=MODELS,
             settings=dict(max_cloud=MAX_CLOUD, max_wind=MAX_WIND, max_gust=MAX_GUST,
-                          min_visibility_m=MIN_VIS_M, min_dew_spread_f=MIN_DEW_SPREAD_F),
+                          min_visibility_m=MIN_VIS_M, min_dew_spread_f=MIN_DEW_SPREAD_F,
+                          max_pm25=MAX_PM25, max_aod=MAX_AOD),
             nights=night_log,
         ), f, indent=2)
 except Exception as e:
@@ -287,7 +360,8 @@ except Exception as e:
 # --- month graphic (horizon trails, public-facing) ---
 W = {}
 for t, w in wx.items():
-    W[t] = (w["cloud"], w["wind"], w["gust"], w["cspread"], w["gspread"])
+    W[t] = (w["cloud"], w["wind"], w["gust"], w["cspread"], w["gspread"],
+            w["eff"], w["smoke"])
 
 mn = ephem.Moon()
 # Calendar covers only days with an evening forecast, starting today.
@@ -333,13 +407,18 @@ for day in dates:
         ml = f"rises {fm(ev[upm.index(True)])}"
     mlh = f'<div class="mo">{e}<span class="ml2">{ml}</span></div>'
     hrs = [W[k] for k in W if getattr(k, "tzinfo", None) and k.date() == day and 18 <= k.hour <= 23]
-    c = sum(x[0] for x in hrs) / len(hrs)
+    if not hrs:
+        cells += '<div class="d e"></div>'
+        continue
+    c = sum(x[5] for x in hrs) / len(hrs)  # layer-weighted cloud
     w = max(x[1] for x in hrs)
     g = max(x[2] for x in hrs)
     disagree = sum(1 for x in hrs if x[3] > 30 or x[4] > 10) > len(hrs) / 2
-    ok = c <= MAX_CLOUD and w < MAX_WIND and g < MAX_GUST and not disagree
+    smoke = sum(1 for x in hrs if x[6]) > len(hrs) / 2
+    ok = c <= MAX_CLOUD and w < MAX_WIND and g < MAX_GUST and not disagree and not smoke
     cls = "g" if ok else ("y" if c <= 60 and w < 15 else "rd")
-    wxcell = f'<div class="x">☁ {c:.0f}%</div><div class="x">💨 {w:.0f}</div>'
+    wxcell = (f'<div class="x">☁ {c:.0f}%{" 🌫" if smoke else ""}</div>'
+              f'<div class="x">💨 {w:.0f}</div>')
     if ok:
         green_days.append(day)
     dn = f"{day:%b} {day.day}" if day.day == 1 and day.month != today.month else str(day.day)
@@ -438,7 +517,7 @@ H = f'''<html><head><style>body{{margin:0;background:linear-gradient(#070b1f,#11
 .sk{{text-align:center}} .kr{{display:flex;align-items:center;font-size:34px;line-height:1.8;border-bottom:1px solid #26315e}} .kd{{width:44px;height:44px;border-radius:22px;color:#0b1230;font-weight:800;text-align:center;line-height:44px;margin-right:16px}} .f{{font-size:27px;color:#9fb0e6;margin-top:22px;line-height:1.6}} .o{{flex:1}} .t{{width:200px;text-align:right;color:#9fb0e6}}</style></head><body><div class="w">
 <h1>Go / No-Go</h1><div class="sub">{PLACE} · Deep-sky targets · {rng} · updated {today:%b %-d}</div>
 <div class="cal">{"".join(f'<div class="hd">{x}</div>' for x in "SMTWTFS")}{pad}{cells}</div>
-<div class="k"><span class="ch g2">Clear + calm</span><span class="ch y2">Iffy</span><span class="ch r2">No</span><span class="kt">Moon icon + when it rises/sets 6 PM–midnight · ☁ cloud % · 💨 wind mph · green = 6–11 PM average · yellow also means models disagree</span></div>
+<div class="k"><span class="ch g2">Clear + calm</span><span class="ch y2">Iffy</span><span class="ch r2">No</span><span class="kt">Moon icon + when it rises/sets 6 PM–midnight · ☁ weighted cloud % · 💨 wind mph · 🌫 smoke/haze · green = 6–11 PM weighted average · yellow also means models disagree</span></div>
 <h2>Top 5 targets · sky at 8 PM</h2><div class="h2s">A short list: the 5 most fun deep-sky targets that are up after the sky is fully dark (sun 18° down, {dark[0].strftime('%-I:%M')} mid-month). Dots show 8 PM.</div><div class="sk">{sv}</div><div class="c">{key}</div>
 <div class="f"><div>🕘 Times PM, mid-month (~1 hr earlier by {LAB[:3]} {nd})</div><div>Map = looking straight up, N at top. Center = overhead. Trails = path through the dark night, labels = start/end of darkness or rise/set. White square = midnight.</div><div>🌙 = still visible with the moon up · Weather data: Open-Meteo (CC BY 4.0) · Forecast guidance only</div></div></div></body></html>'''
 
