@@ -70,15 +70,15 @@ crontab -l
 The active entries are:
 
 ```cron
-0 5 * * * /home/user/ethos101.github.io/_scripts/run_skycheck.sh >> /home/user/ethos101.github.io/_scripts/out.log 2>&1
-0 6 * * 0 /usr/bin/python3 /home/user/ethos101.github.io/_scripts/verify_forecast.py >> /home/user/.local/share/skycheck/verify.log 2>&1 || mailx -r ethos101@gmail.com -s "Forecast verification failed" ethos101@gmail.com < /home/user/.local/share/skycheck/verify.log
+0 2 * * * /home/user/ethos101.github.io/_scripts/run_skycheck.sh >> /home/user/ethos101.github.io/_scripts/out.log 2>&1
+0 3 * * 0 /usr/bin/python3 /home/user/ethos101.github.io/_scripts/verify_forecast.py >> /home/user/.local/share/skycheck/verify.log 2>&1 || mailx -r ethos101@gmail.com -s "Forecast verification failed" ethos101@gmail.com < /home/user/.local/share/skycheck/verify.log
 ```
 
-- The daily job runs at 05:00 America/Chicago via `run_skycheck.sh`, which
+- The daily job runs at 02:00 America/Chicago via `run_skycheck.sh`, which
   generates the forecast, publishes the image/summary, commits, pushes, and
   emails the result. The wrapper sends its own mail, so cron output is only
   appended to `out.log`.
-- The weekly job runs Sunday at 06:00 and rebuilds the accuracy report. If it
+- The weekly job runs Sunday at 03:00 and rebuilds the accuracy report. If it
   fails, cron emails the log.
 
 Adjust the times with `crontab -e`. The wrapper uses `flock`, so an overlapping

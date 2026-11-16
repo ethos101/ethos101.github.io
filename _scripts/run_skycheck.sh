@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run skycheck.py, publish the forecast, and email it.
-# Cron: 0 5 * * * /home/user/ethos101.github.io/_scripts/run_skycheck.sh
+# Cron: 0 2 * * * /home/user/ethos101.github.io/_scripts/run_skycheck.sh
 set -uo pipefail
 
 REPO="/home/user/ethos101.github.io"

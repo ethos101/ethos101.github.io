@@ -92,7 +92,7 @@ class FetchError(RuntimeError):
 def fetch_json(url, tries=5, timeout=45):
     """Fetch JSON with a timeout and exponential-backoff retries.
 
-    A 5 AM run can hit a router or TLS handshake that is still waking up, so
+    An early-morning run can hit a router or TLS handshake that is still waking up, so
     ride out multi-minute outages instead of failing the whole day's forecast.
     """
     last = None
