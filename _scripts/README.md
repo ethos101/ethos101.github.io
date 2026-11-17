@@ -12,8 +12,7 @@ month graphic published at `/images/month.png`.
 
 The script bootstraps `~/.skycheck-venv` from `requirements.txt` on first run.
 
-To do the full update (publish the image, refresh the post summary and date,
-email it):
+To do the full update (publish the image, refresh the post summary and date):
 
 ```bash
 ./run_skycheck.sh
@@ -70,16 +69,19 @@ crontab -l
 The active entries are:
 
 ```cron
+SKYCHECK_CHROME=/home/user/.local/bin/skycheck-chrome
 0 2 * * * /home/user/ethos101.github.io/_scripts/run_skycheck.sh >> /home/user/ethos101.github.io/_scripts/out.log 2>&1
-0 3 * * 0 /usr/bin/python3 /home/user/ethos101.github.io/_scripts/verify_forecast.py >> /home/user/.local/share/skycheck/verify.log 2>&1 || mailx -r ethos101@gmail.com -s "Forecast verification failed" ethos101@gmail.com < /home/user/.local/share/skycheck/verify.log
+0 3 * * 0 /usr/bin/python3 /home/user/ethos101.github.io/_scripts/verify_forecast.py >> /home/user/.local/share/skycheck/verify.log 2>&1
 ```
 
 - The daily job runs at 02:00 America/Chicago via `run_skycheck.sh`, which
-  generates the forecast, publishes the image/summary, commits, pushes, and
-  emails the result. The wrapper sends its own mail, so cron output is only
-  appended to `out.log`.
-- The weekly job runs Sunday at 03:00 and rebuilds the accuracy report. If it
-  fails, cron emails the log.
+  generates the forecast, publishes the image/summary, commits, and pushes.
+  Its output and any warnings are appended to `out.log`.
+- The weekly job runs Sunday at 03:00 and rebuilds the accuracy report; errors
+  are appended to `verify.log`.
+- `SKYCHECK_CHROME` points at the Playwright Chromium used to render the
+  graphic (the distro Chrome is not installed).
+- Email notifications are not sent; failures are recorded in the log files.
 
 Adjust the times with `crontab -e`. The wrapper uses `flock`, so an overlapping
 manual run is skipped rather than corrupting the output.
@@ -126,8 +128,6 @@ comparison is consistent with the forecast.
 
 `run_skycheck.sh` accepts:
 
-- `SKYCHECK_NO_MAIL=1` — skip email (useful for testing)
-- `SKYCHECK_MAIL_TO`, `SKYCHECK_MAIL_FROM` — override recipients
 - `GIT_SSH_COMMAND` — override the SSH command used for `git push`
 - `SKYCHECK_CHROME` — path to the Chrome/Chromium binary (default
   `/usr/bin/google-chrome`)

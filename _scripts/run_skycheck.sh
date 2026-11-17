@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run skycheck.py, publish the forecast, and email it.
+# Run skycheck.py and publish the forecast.
 # Cron: 0 2 * * * /home/user/ethos101.github.io/_scripts/run_skycheck.sh
 set -uo pipefail
 
@@ -8,23 +8,10 @@ SCRIPT_DIR="$REPO/_scripts"
 OUT="$SCRIPT_DIR/out.log"
 INCLUDE="$REPO/_includes/forecast_status.html"
 ABOUT="$REPO/_posts/1900-01-01-about.md"
-POST_URL="https://willowcreekobservatory.com/about/"
-MAIL_TO="${SKYCHECK_MAIL_TO:-ethos101@gmail.com}"
-MAIL_FROM="${SKYCHECK_MAIL_FROM:-ethos101@gmail.com}"
 LOCK="/tmp/skycheck-$(id -u).lock"
-BODY="/tmp/skycheck-mail-$(id -u).txt"
 
 export TZ="America/Chicago"
 export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes}"
-
-send_mail() {  # $1 subject, $2 body file, $3 optional attachment
-    [ "${SKYCHECK_NO_MAIL:-0}" = "1" ] && return 0
-    if [ -n "${3:-}" ]; then
-        mailx -r "$MAIL_FROM" -s "$1" -A "$3" "$MAIL_TO" <"$2"
-    else
-        mailx -r "$MAIL_FROM" -s "$1" "$MAIL_TO" <"$2"
-    fi
-}
 
 # Only one run at a time.
 exec 9>"$LOCK"
@@ -40,7 +27,6 @@ cd "$SCRIPT_DIR" || exit 1
 status=$?
 if [ "$status" -ne 0 ]; then
     echo "skycheck.py failed with status $status" >>"$OUT"
-    send_mail "Observatory Go/No-go FAILED" "$OUT"
     exit "$status"
 fi
 
@@ -48,7 +34,6 @@ fi
 latest=$(ls -t "$SCRIPT_DIR"/month_*.png 2>/dev/null | head -n1)
 if [ -z "$latest" ]; then
     echo "ERROR: no month_*.png produced" >>"$OUT"
-    send_mail "Observatory Go/No-go FAILED" "$OUT"
     exit 1
 fi
 cp "$latest" "$REPO/images/month.png"
@@ -72,29 +57,15 @@ if [ -f "$ABOUT" ]; then
 fi
 
 # 4. Commit and push only the published files (never sweep in other staged work).
-push_note=""
 publish=(images/month.png "$INCLUDE")
 [ -f "$ABOUT" ] && publish+=("$ABOUT")
 git -C "$REPO" add "${publish[@]}"
 if ! git -C "$REPO" diff --cached --quiet -- "${publish[@]}"; then
     if git -C "$REPO" commit --only -m "Update stargazing forecast ($stamp)" -- "${publish[@]}" >>"$OUT" 2>&1; then
         if ! git -C "$REPO" push origin main >>"$OUT" 2>&1; then
-            push_note="WARNING: forecast committed locally but git push failed."
-            echo "$push_note" >>"$OUT"
+            echo "WARNING: forecast committed locally but git push failed." >>"$OUT"
         fi
     else
-        push_note="WARNING: forecast generated but git commit failed."
-        echo "$push_note" >>"$OUT"
+        echo "WARNING: forecast generated but git commit failed." >>"$OUT"
     fi
 fi
-
-# 5. Email the forecast text + graphic.
-{
-    echo "Forecast updated $stamp."
-    echo
-    cat "$OUT"
-    [ -n "$push_note" ] && { echo; echo "$push_note"; }
-    echo
-    echo "Post: $POST_URL"
-} >"$BODY"
-send_mail "Observatory Go/No-go" "$BODY" "$REPO/images/month.png"
